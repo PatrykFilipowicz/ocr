@@ -8,6 +8,19 @@ const execAsync = promisify(exec);
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 
+// API Key middleware
+const API_KEY = process.env.API_KEY || '2a96434b639b4c1e889130682bd618d309f313b30f7b84f243b8a225f424a097';
+
+app.use('/ocr-pdf', (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  if (!apiKey || apiKey !== API_KEY) {
+    return res.status(401).json({ 
+      error: 'Unauthorized - wymagany poprawny klucz API w nagłówku x-api-key' 
+    });
+  }
+  next();
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -86,4 +99,6 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serwer OCR działa na porcie ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔍 OCR endpoint: POST http://localhost:${PORT}/ocr-pdf`);
+  console.log(`🔑 API Key: ${API_KEY}`);
+  console.log(`📝 Użyj nagłówka: x-api-key: ${API_KEY}`);
 });
