@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 
 // API Key middleware
-const API_KEY = process.env.API_KEY || '2a96434b639b4c1e889130682bd618d309f313b30f7b84f243b8a225f424a097';
+const API_KEY = process.env.API_KEY;
 
 app.use('/ocr-pdf', (req, res, next) => {
   const apiKey = req.headers['x-api-key'];
