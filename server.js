@@ -27,7 +27,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Główny endpoint OCR - przyjmuje tylko file_id
+// Główny endpoint OCR - przyjmuje file_id i buduje Google Drive URL
 app.post('/ocr-pdf', async (req, res) => {
   const { file_id } = req.body;
   
@@ -44,15 +44,13 @@ app.post('/ocr-pdf', async (req, res) => {
   try {
     console.log(`[${timestamp}] 📥 Pobieram PDF dla file_id: ${file_id}`);
     
-    // Tu n8n powinien wcześniej pobrać plik i udostępnić pod jakimś URL
-    // Albo wysłać plik jako base64 w file_data
-    const response = await axios.get(
-      `YOUR_N8N_FILE_URL/${file_id}`, // Tu będzie URL z n8n
-      {
-        responseType: 'arraybuffer',
-        timeout: 30000
-      }
-    );
+    // Buduj Google Drive download URL
+    const downloadUrl = `https://drive.google.com/uc?id=${file_id}&export=download`;
+    
+    const response = await axios.get(downloadUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000
+    });
     
     console.log(`[${timestamp}] 💾 Zapisuję PDF (${response.data.byteLength} bytes)...`);
     await fs.writeFile(inputPath, response.data);
