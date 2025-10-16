@@ -27,13 +27,13 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Główny endpoint OCR
+// Główny endpoint OCR - przyjmuje tylko file_id
 app.post('/ocr-pdf', async (req, res) => {
-  const { file_id, access_token } = req.body;
+  const { file_id } = req.body;
   
-  if (!file_id || !access_token) {
+  if (!file_id) {
     return res.status(400).json({ 
-      error: 'Brak file_id lub access_token' 
+      error: 'Brak file_id w request body' 
     });
   }
   
@@ -42,13 +42,13 @@ app.post('/ocr-pdf', async (req, res) => {
   const outputPath = `/tmp/output-${timestamp}.pdf`;
   
   try {
-    console.log(`[${timestamp}] 📥 Pobieram PDF z Google Drive...`);
+    console.log(`[${timestamp}] 📥 Pobieram PDF dla file_id: ${file_id}`);
     
-    // Pobierz PDF z Google Drive
+    // Tu n8n powinien wcześniej pobrać plik i udostępnić pod jakimś URL
+    // Albo wysłać plik jako base64 w file_data
     const response = await axios.get(
-      `https://www.googleapis.com/drive/v3/files/${file_id}?alt=media`,
+      `YOUR_N8N_FILE_URL/${file_id}`, // Tu będzie URL z n8n
       {
-        headers: { 'Authorization': `Bearer ${access_token}` },
         responseType: 'arraybuffer',
         timeout: 30000
       }
@@ -78,7 +78,8 @@ app.post('/ocr-pdf', async (req, res) => {
     res.json({ 
       text, 
       status: 'success',
-      length: text.length
+      length: text.length,
+      file_id
     });
     
   } catch (error) {
@@ -100,6 +101,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serwer OCR działa na porcie ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔍 OCR endpoint: POST http://localhost:${PORT}/ocr-pdf`);
+  console.log(`📄 Body: {"file_id": "your-file-id"}`);
   console.log(`🔑 API Key: ${API_KEY}`);
   console.log(`📝 Użyj nagłówka: x-api-key: ${API_KEY}`);
 });
