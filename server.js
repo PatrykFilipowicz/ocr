@@ -8,6 +8,7 @@ const execAsync = promisify(exec);
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
+app.use(express.raw({ type: 'application/pdf', limit: '50mb' }));
 
 // API Key middleware
 const API_KEY = process.env.API_KEY;
@@ -27,33 +28,59 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Główny endpoint OCR - przyjmuje file_id i buduje Google Drive URL
+// Główny endpoint OCR - obsługuje binary data, file_id lub base64
 app.post('/ocr-pdf', async (req, res) => {
-  const { file_id } = req.body;
-  
-  if (!file_id) {
-    return res.status(400).json({ 
-      error: 'Brak file_id w request body' 
-    });
-  }
-  
   const timestamp = Date.now();
   const inputPath = `/tmp/input-${timestamp}.pdf`;
   const outputPath = `/tmp/output-${timestamp}.pdf`;
   
   try {
-    console.log(`[${timestamp}] 📥 Pobieram PDF dla file_id: ${file_id}`);
+    let pdfBuffer;
+    let source = 'unknown';
     
-    // Buduj Google Drive download URL
-    const downloadUrl = `https://drive.google.com/uc?id=${file_id}&export=download`;
+    // Opcja 1: Binary data (najlepsze dla n8n)
+    if (req.headers['content-type'] === 'application/pdf' && Buffer.isBuffer(req.body)) {
+      console.log(`[${timestamp}] 📥 Otrzymano PDF jako binary data`);
+      pdfBuffer = req.body;
+      source = 'binary';
+    }
+    // Opcja 2: JSON z file_data (base64) lub file_id
+    else if (req.body && typeof req.body === 'object') {
+      const { file_id, file_data } = req.body;
+      
+      if (file_data) {
+        console.log(`[${timestamp}] 📥 Otrzymano PDF jako base64`);
+        pdfBuffer = Buffer.from(file_data, 'base64');
+        source = 'base64';
+      } else if (file_id) {
+        console.log(`[${timestamp}] 📥 Pobieram PDF dla file_id: ${file_id}`);
+        const downloadUrl = `https://drive.google.com/uc?id=${file_id}&export=download`;
+        
+        const response = await axios.get(downloadUrl, {
+          responseType: 'arraybuffer',
+          timeout: 30000
+        });
+        
+        console.log(`[${timestamp}] Content-Type: ${response.headers['content-type']}`);
+        pdfBuffer = Buffer.from(response.data);
+        source = `file_id: ${file_id}`;
+      } else {
+        throw new Error('Wymagany file_id, file_data (base64) lub wyślij jako binary data (Content-Type: application/pdf)');
+      }
+    } else {
+      throw new Error('Wyślij PDF jako binary data (Content-Type: application/pdf) lub JSON z file_id/file_data');
+    }
     
-    const response = await axios.get(downloadUrl, {
-      responseType: 'arraybuffer',
-      timeout: 30000
-    });
+    // Sprawdź czy to rzeczywiście PDF
+    const firstBytes = pdfBuffer.slice(0, 4).toString();
+    console.log(`[${timestamp}] Pierwsze bajty: ${firstBytes}`);
     
-    console.log(`[${timestamp}] 💾 Zapisuję PDF (${response.data.byteLength} bytes)...`);
-    await fs.writeFile(inputPath, response.data);
+    if (!firstBytes.startsWith('%PDF')) {
+      throw new Error('Plik nie jest PDF');
+    }
+    
+    console.log(`[${timestamp}] 💾 Zapisuję PDF (${pdfBuffer.length} bytes)...`);
+    await fs.writeFile(inputPath, pdfBuffer);
     
     console.log(`[${timestamp}] 🔍 Uruchamiam OCR...`);
     
@@ -77,7 +104,7 @@ app.post('/ocr-pdf', async (req, res) => {
       text, 
       status: 'success',
       length: text.length,
-      file_id
+      source
     });
     
   } catch (error) {
