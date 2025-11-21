@@ -82,6 +82,29 @@ app.post('/ocr-pdf', async (req, res) => {
     console.log(`[${timestamp}] 💾 Zapisuję PDF (${pdfBuffer.length} bytes)...`);
     await fs.writeFile(inputPath, pdfBuffer);
     
+    // Sprawdź czy PDF jest zaszyfrowany
+    console.log(`[${timestamp}] 🔐 Sprawdzam szyfrowanie PDF...`);
+    try {
+      await execAsync(`qpdf --show-encryption "${inputPath}"`, { timeout: 10000 });
+      console.log(`[${timestamp}] ⚠️ PDF jest zaszyfrowany - próbuję odszyfrowywać...`);
+      
+      const decryptedPath = `/tmp/decrypted-${timestamp}.pdf`;
+      await execAsync(`qpdf --decrypt "${inputPath}" "${decryptedPath}"`, { timeout: 30000 });
+      
+      // Zamień zaszyfrowany plik na odszyfrowany
+      await fs.unlink(inputPath);
+      await fs.rename(decryptedPath, inputPath);
+      console.log(`[${timestamp}] ✅ PDF odszyfrowany pomyślnie`);
+    } catch (decryptError) {
+      if (decryptError.message.includes('No encryption')) {
+        console.log(`[${timestamp}] ✅ PDF nie jest zaszyfrowany`);
+      } else if (decryptError.message.includes('password')) {
+        throw new Error('PDF jest chroniony hasłem. Nie można go odszyfrowywać bez hasła.');
+      } else {
+        console.log(`[${timestamp}] ⚠️ Błąd sprawdzania szyfrowania: ${decryptError.message}`);
+      }
+    }
+    
     console.log(`[${timestamp}] 🔍 Uruchamiam OCR...`);
     
     // OCR z timeout
