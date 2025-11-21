@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     tesseract-ocr-pol \
     poppler-utils \
+    qpdf \
     && rm -rf /var/lib/apt/lists/*
 
 # Ustawienia aplikacji
